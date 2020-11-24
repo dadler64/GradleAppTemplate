@@ -1,0 +1,25 @@
+# IntelliJ
+.idea/
+*.iml
+
+# Gradle
+.gradle/
+!gradle/wrapper/*
+test/
+
+# Build Files
+build/
+target/
+*.class
+
+# MacOS Files
+.DS_Store
+
+# Windows Files
+thumbs.db
+
+# Eclipse
+.settings/
+classes/
+.classpath
+.project

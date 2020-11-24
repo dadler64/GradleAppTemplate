@@ -1,0 +1,165 @@
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.netflix.nebula:gradle-ospackage-plugin:8.1.0' // https://plugins.gradle.org/plugin/nebula.ospackage
+        classpath 'edu.sc.seis.gradle:launch4j:2.4.6' // https://plugins.gradle.org/plugin/edu.sc.seis.launch4j
+    }
+}
+
+apply plugin: 'java'
+apply plugin: 'distribution'
+apply plugin: 'edu.sc.seis.launch4j'
+//apply plugin: 'nebula.ospackage'
+
+// Common Configuration //
+rootProject.version='1.0.0'
+targetCompatibility='1.8'
+
+project.ext.version='1.0.0'
+project.ext.author='YOUR_NAME_HERE'
+project.ext.email='<ENTER_YOUR_EMAIL_HERE>'
+project.ext.copyright='(C) 2020'
+project.ext.description='ENTER_PROJECT_DESCRIPTION_HERE'
+project.ext.url='https://github.com/dadler64/GradleAppTemplate'
+project.ext.bundleId="com.adlerd"
+project.ext.mainClass="${project.ext.bundleId}.Main"
+project.ext.resPath='/src/main/resources'
+
+allprojects {
+    apply plugin: 'eclipse'
+    apply plugin: 'idea'
+
+    tasks.withType(JavaCompile) {
+        sourceCompatibility = targetCompatibility = '1.8'
+        options.compilerArgs << '-Xlint:deprecation'
+        options.compilerArgs << '-Xlint:unchecked'
+        options.encoding = 'UTF-8'
+    }
+
+    repositories {
+        jcenter()
+    }
+
+    configurations {
+        provided
+        compile.extendsFrom provided
+    }
+}
+
+// 'cleanIdea' task extension //
+cleanIdea.doFirst {
+    delete project.name + '.iws'
+    delete 'out'
+    followSymLinks = true
+}
+
+subprojects.each { subproject ->
+    evaluationDependsOn(subproject.path)
+}
+
+// All in one JAR file //
+jar {
+    // Add dependencies
+    def deps = []
+
+    subprojects.each { subProject ->
+        from subProject.sourceSets.main.output.classesDirs
+        from subProject.sourceSets.main.output.resourcesDir
+        deps += subProject.configurations.runtime - subProject.configurations.provided
+    }
+    subprojects.each { subProject ->
+        deps -= subProject.jar.archivePath
+    }
+    deps = deps.unique().collect { it.isDirectory() ? it : zipTree(it) }
+    from deps
+
+    manifest {
+        attributes 'Main-Class': project.ext.mainClass.toString(),
+//                'SplashScreen-Image': "${project.ext.resPath}/${rootProject.name}.png",
+                'Version': project.version
+    }
+
+    duplicatesStrategy DuplicatesStrategy.EXCLUDE
+}
+
+// Java executable wrapper for Windows //
+launch4j {
+    createExe.dependsOn 'jar'
+
+    version = textVersion = project.version
+    fileDescription = productName = project.name
+    errTitle = "${rootProject.name} Wrapper"
+    copyright = 'Dan Adler (C) 2020'
+    fileDescription = "Simple template for a Gradle swing app"
+    icon = projectDir.path + "${project.ext.resPath}/${rootProject.name}.ico"
+}
+
+// Distributions for MacOS and Windows //
+distributions {
+
+    osx.contents {
+        // info.plist file
+        into("${rootProject.name}.app/Contents") {
+            if (file("./dist/macos/resources/Info.plist").exists()) {
+                from('./dist/macos/resources') {
+                    include 'Info.plist'
+                    expand VERSION: project.ext.version,
+                            JAR: project.name,
+                            COPYRIGHT: project.ext.copyright,
+                            AUTHOR: project.ext.author,
+                            BUNDLE_ID: project.ext.bundleId,
+                            MAIN_CLASS: project.ext.mainClass
+                }
+            } else {
+                println("WARNING: Unable to locate the \'Info.plist\' file!\nMacOS bundeled app may not work!")
+            }
+        }
+        // universalJavaApplicationStub.sh
+        into("${rootProject.name}.app/Contents/MacOS") {
+            if (file("./dist/macos/resources/universalJavaApplicationStub.sh").exists()) {
+                from('./dist/macos/resources') {
+                    include 'universalJavaApplicationStub.sh'
+                    fileMode 0755
+                }
+            } else {
+                println("WARNING: Unable to locate the \'universalJavaApplicationStub.sh\' file!\nMacOS bundeled app may not work!")
+            }
+        }
+        // *.icns file
+        into ("${rootProject.name}.app/Contents/Resources") {
+            if (file("./dist/macos/resources/${rootProject.name}.icns").exists()) {
+                from ('./dist/macos/resources') {
+                    include "${rootProject.name}.icns"
+                }
+            } else {
+                println("WARNING: Unable to locate icon for MacOS app at <./dist/macos/resources/${rootProject.name}.icns>!")
+            }
+        }
+        // project *.jar file
+        into("${rootProject.name}.app/Contents/Resources/Java") {
+            from jar
+        }
+        from 'LICENSE', 'README.md'
+    }
+
+    windows.contents {
+        from "build/launch4j/${project.name}.exe"
+        from 'LICENSE', 'README.md'
+    }
+
+    installWindowsDist.dependsOn createExe
+    windowsDistTar.dependsOn createExe
+    windowsDistZip.dependsOn createExe
+
+    installOsxDist.dependsOn 'jar'
+    osxDistTar.dependsOn 'jar'
+    osxDistZip.dependsOn 'jar'
+}
+
+dependencies {
+    compile 'com.fifesoft:rsyntaxtextarea:3.0.8'
+    compile 'com.jtattoo:JTattoo:1.6.13'
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
